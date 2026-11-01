@@ -2,7 +2,13 @@
 
 **Autonomous AI Research Agent** is a full-stack, production-ready AI Research Agent. It takes a user's query, plans a research strategy, autonomously browses the web, verifies facts using an LLM-as-a-Judge, and synthesizes a highly structured Markdown research report—all while streaming its live internal progress to the frontend.
 
-![Workflow Architecture](./assets\Autonomous AI Research Workflow.png)
+**An end-to-end AI agent that autonomously plans, researches, verifies, and generates structured reports.**
+
+[![Live Demo](https://img.shields.io/badge/Live_Demo-Click_Here-brightgreen?style=for-the-badge&logo=render)](https://autonomous-ai-research-agent-r3s9.onrender.com/)
+[![GitHub Repo](https://img.shields.io/badge/GitHub-Repository-blue?style=for-the-badge&logo=github)](https://github.com/Om123Chodhary/Autonomous-AI-Research-Agent)
+[![Tech Stack](https://img.shields.io/badge/Tech_Stack-FastAPI_|_Groq_|_Docker-purple?style=for-the-badge)](https://github.com/Om123Chodhary/Autonomous-AI-Research-Agent)
+
+![Workflow Architecture](./assets/Autonomous%20AI%20Research%20Workflow.png))
 
 ## 🚀 Key Features
 
@@ -39,6 +45,14 @@ By building this project, the following advanced AI Engineering skills were impl
 *   **Async Python:** Handling concurrent tasks, non-blocking API calls, and background threads.
 *   **Production Reliability:** API fallback systems, error handling, and input validation.
 *   **Full-Stack Development:** Building a responsive frontend that consumes real-time streaming data from a Python backend.
+
+## 🌐 Live Demo
+
+Aap is project ko bina kuch install kiye seedha apne browser mein try kar sakte hain:
+
+👉 **[Launch Autonomous AI Research Agent](https://autonomous-ai-research-agent-r3s9.onrender.com/)**
+
+*(Note: Yeh Render ke free tier par hosted hai. Agar 15 minute se koi use nahi kar raha, toh server 'sleep' mode mein chala jata hai. Pehli request load hone mein 30-50 seconds lag sakte hain.)*
 
 ## 🚀 Getting Started (Local Setup)
 
