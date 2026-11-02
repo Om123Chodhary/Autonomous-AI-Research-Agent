@@ -337,26 +337,52 @@ async def research_agent(user_request,session_id, max_steps=8, progress_callback
                 arguments["session_id"] = session_id
             
             print(f"\nCalling tool: {tool_name} | Args: {arguments}")
+            # 🚨 STRICT ENFORCEMENT: AGAR SEARCH KIYA HAI TOH DIRECT SEARCH BLOCK HOGA
+            if tool_name == "search_web" and search_done:
+                print("\n[ENFORCEMENT] Blocked duplicate search. Forcing read_webpage.")
+                result = "Error: You have already performed a web search. You MUST use 'read_webpage' on a URL from your previous search results. Do NOT search again."
+                messages.append({
+                    "role": "tool",
+                    "tool_call_id": tool_call.id,
+                    "name": tool_name,
+                    "content": str(result)
+                })
+                continue # Search execute mat karo, LLM ko error do
+
+            # 🚨 STRICT ENFORCEMENT: AGAR PADHA HAI TOH NOTe SAVE KARO
+            if tool_name == "search_web" and read_done and not note_added:
+                print("\n[ENFORCEMENT] Blocked search. You must save notes first.")
+                result = "Error: You have read a webpage but haven't saved the findings. You MUST use 'add_research_note' now."
+                messages.append({
+                    "role": "tool",
+                    "tool_call_id": tool_call.id,
+                    "name": tool_name,
+                    "content": str(result)
+                })
+                continue# Search execute mat karo, LLM ko error do
             emit({
                 "type": "tool",
                 "tool": tool_name,
                 "message": f"Using tool: {tool_name}"
             })
             
-            # Update state flags
+            # Flags update karein
             if tool_name == "search_web": 
                 search_done = True
+                read_done = False # Naya search matlab abhi padha nahi gaya
+                note_added = False
             elif tool_name == "read_webpage": 
                 read_done = True
             elif tool_name == "add_research_note":
                 note_added = True
-                pending_verification = True # <--- Mark verification as pending immediately after saving note
+                pending_verification = True 
             elif tool_name == "verify_finding":
-                emit({
-                    "type": "verification",
-                    "message": "Verifying Research Evidence..."
-                })
+                emit({"type": "verification", "message": "Verifying Research Evidence..."})
                 pending_verification = False 
+                # 🚨 SABSE ZAROORI: Ek cycle poora hone ke baad flags reset karo taaki naya search ho sake
+                search_done = False 
+                read_done = False
+                note_added = False
             
             tool_function = AVAILABLE_TOOLS.get(tool_name)
             
