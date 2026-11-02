@@ -46,17 +46,86 @@ By building this project, the following advanced AI Engineering skills were impl
 *   **Production Reliability:** API fallback systems, error handling, and input validation.
 *   **Full-Stack Development:** Building a responsive frontend that consumes real-time streaming data from a Python backend.
 
+---
+
+
 ## 🌐 Live Demo
 
 Aap is project ko bina kuch install kiye seedha apne browser mein try kar sakte hain:
 
 👉 **[Launch Autonomous AI Research Agent](https://autonomous-ai-research-agent-r3s9.onrender.com/)**
 
-*(Note: Yeh Render ke free tier par hosted hai. Agar 15 minute se koi use nahi kar raha, toh server 'sleep' mode mein chala jata hai. Pehli request load hone mein 30-50 seconds lag sakte hain.)*
+---
+
+## 👨‍💻 Author
+
+<div align="center">
+
+### **Oma Ram**
+**B.S. Applied AI & Data Science @ IIT Jodhpur**
+*AI Engineer | GenAI | Agentic AI & RAG Systems*
+
+I am a passionate AI Engineer who believes in understanding the core architecture behind AI systems. I built this project entirely from scratch to master the mechanics of autonomous agents, state management, and production-grade API design.
+
+[![GitHub](https://img.shields.io/badge/GitHub-100000?style=for-the-badge&logo=github&logoColor=white)](https://github.com/Om123Chodhary)
+[![LinkedIn](https://img.shields.io/badge/LinkedIn-0077B5?style=for-the-badge&logo=linkedin&logoColor=white)](https://www.linkedin.com/in/oma-ram-choudhary-07532024a/)
+[![Email](https://img.shields.io/badge/Email-D14836?style=for-the-badge&logo=gmail&logoColor=white)](mailto:omaramchoudhary418@gmail.com)
+
+</div>
+
+---
+
+## 🛠️ Technical Design Decisions & FAQs
+
+This section highlights the core engineering challenges faced during the development of this project and the architectural decisions made to solve them.
+
+<details>
+<summary><b>1. Why did you build the Agent Loop from scratch instead of using LangGraph or CrewAI?</b></summary>
+<br>
+While frameworks like LangGraph and CrewAI are great for rapid prototyping, they abstract away the underlying mechanics. I wanted absolute control over the <b>State-Machine Enforcement</b> and API routing. Building it from scratch allowed me to implement custom fault-tolerance (like multi-key fallbacks) and real-time Server-Sent Events (SSE) streaming exactly the way I wanted, without fighting the framework's opinions.
+</details>
+
+<details>
+<summary><b>2. How does the system handle LLM hallucinations and "laziness"?</b></summary>
+<br>
+LLMs often try to skip steps (e.g., giving an answer before verifying facts). I solved this using two methods:
+<ul>
+  <li><b>State-Machine Enforcement:</b> I implemented Python-level boolean flags (like <code>search_done</code>, <code>read_done</code>, <code>pending_verification</code>). If the LLM tries to give a final answer without completing the mandatory steps, the Python code intercepts it and forces the LLM back into the loop.</li>
+  <li><b>LLM-as-a-Judge:</b> A secondary LLM call acts as an impartial judge to verify if the extracted evidence genuinely supports the research finding before saving it.</li>
+</ul>
+</details>
+
+<details>
+<summary><b>3. What happens if the Groq API rate limit (429 Error) is hit?</b></summary>
+<br>
+The system uses a <b>Multi-Key API Fallback Strategy</b>. I pass an array of API keys to the custom <code>call_llm()</code> function. If Key 1 hits a rate limit, the code catches the exception and automatically retries the exact same request using Key 2, then Key 3. This ensures 99.9% uptime for the end-user.
+</details>
+
+<details>
+<summary><b>4. How is the real-time progress (Searching, Verifying) streamed to the frontend?</b></summary>
+<br>
+I implemented <b>Server-Sent Events (SSE)</b>. The backend uses <code>asyncio.Queue</code> to collect events from the agent. FastAPI's <code>StreamingResponse</code> then yields these events as JSON chunks to the frontend. The frontend reads this stream using the <code>fetch()</code> API and <code>getReader()</code>, updating the UI in real-time without needing WebSockets.
+</details>
+
+<details>
+<summary><b>5. Why use `asyncio.to_thread`? Does the server block during heavy web scraping?</b></summary>
+<br>
+No, the server does not block. FastAPI is asynchronous, but heavy synchronous tasks like web scraping (<code>requests.get</code>) or LLM API calls can block the event loop. I wrapped these blocking functions in <code>asyncio.to_thread()</code>. This offloads the heavy work to a background thread, allowing the main event loop to continue serving other users concurrently.
+</details>
+
+<details>
+<summary><b>6. What happens if a user closes the browser mid-research?</b></summary>
+<br>
+I implemented <b>Client Disconnect Handling</b>. The <code>/research</code> endpoint continuously checks <code>await request.is_disconnected()</code>. If the user closes the tab, the server immediately cancels the background agent task. This prevents the server from wasting API tokens and compute resources on a request no one is listening to.
+</details>
+
+---
 
 ## 🚀 Getting Started (Local Setup)
 
-1. **Clone the repository:**
-   ```bash
-   git clone https://github.com/Om123Chodhary/Autonomous-AI-Research-Agent.git
-   cd Autonomous AI Research Agent
+Follow these steps to run the project on your local machine.
+
+**1. Clone the repository:**
+```bash
+git clone https://github.com/Om123Chodhary/Autonomous-AI-Research-Agent.git
+cd Autonomous-AI-Research-Agent
