@@ -349,22 +349,24 @@ async def research_agent(user_request,session_id, max_steps=8, progress_callback
                 })
                 continue # Search execute mat karo, LLM ko error do
 
-            # 🚨 STRICT ENFORCEMENT: AGAR PADHA HAI TOH NOTe SAVE KARO
-            if tool_name == "search_web" and read_done and not note_added:
-                print("\n[ENFORCEMENT] Blocked search. You must save notes first.")
-                result = "Error: You have read a webpage but haven't saved the findings. You MUST use 'add_research_note' now."
-                messages.append({
-                    "role": "tool",
-                    "tool_call_id": tool_call.id,
-                    "name": tool_name,
-                    "content": str(result)
-                })
-                continue# Search execute mat karo, LLM ko error do
-            emit({
-                "type": "tool",
-                "tool": tool_name,
-                "message": f"Using tool: {tool_name}"
-            })
+             # 1. Agar search ho gaya hai aur read nahi hua -> Sirf read allowed
+            if search_done and not read_done and tool_name != "read_webpage":
+                result = "Error: You have already searched. You MUST use 'read_webpage' now."
+                print("[ENFORCEMENT] Blocked. Forcing read_webpage.")
+            
+            # 2. Agar read ho gaya hai aur note save nahi hua -> Kuch bhi allowed nahi, sirf add_research_note
+            elif read_done and not note_added and tool_name != "add_research_note":
+                result = "Error: You just read a webpage. You MUST use 'add_research_note' to save the findings before doing anything else."
+                print("[ENFORCEMENT] Blocked. Forcing add_research_note.")
+            
+            # 3. Agar note save ho gaya hai -> Sirf verify allowed
+            elif pending_verification and tool_name != "verify_finding":
+                result = "Error: You saved a note. You MUST use 'verify_finding' on it now."
+                print("[ENFORCEMENT] Blocked. Forcing verify_finding.")
+            
+            # 4. Agar sab theek hai, toh tool execute karo
+            else:
+                emit({"type": "tool", "tool": tool_name, "message": f"Using tool: {tool_name}"})
             
             # Flags update karein
             if tool_name == "search_web": 
