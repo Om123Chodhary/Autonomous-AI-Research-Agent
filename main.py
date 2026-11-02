@@ -1,5 +1,6 @@
 import asyncio
 import json
+import uuid 
 
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, Request
@@ -77,7 +78,10 @@ async def research(topic: str, request: Request):
     # 1. Validation: Block empty topics
     if not topic.strip():
         raise HTTPException(status_code=400, detail="Topic cannot be empty.")
-    
+
+    session_id = str(uuid.uuid4())
+    print(f"\n[NEW REQUEST] Assigned Session ID: {session_id}")
+
     queue = asyncio.Queue()
     
     def progress_callback(event):
@@ -87,7 +91,7 @@ async def research(topic: str, request: Request):
     async def run_agent_task():
         try:
             # Directly call the agent with the progress callback
-            await run_agent(topic, max_steps=8, progress_callback=progress_callback)
+            await run_agent(topic,session_id, max_steps=8, progress_callback=progress_callback)
         except Exception as e:
             queue.put_nowait({"type": "error", "message": str(e)})
 

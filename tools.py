@@ -20,7 +20,7 @@ client = OpenAI(
 )
 MODEL = os.getenv("MODEL", "llama3-70b-8192")
 
-def verify_finding(source: str, finding: str, evidence: str) -> dict:
+def verify_finding(session_id: str,source: str, finding: str, evidence: str) -> dict:
     print(f"\n[Verifier] Checking: '{finding}'")
     system_prompt = (
         "You are an evidence verification assistant. "
@@ -47,18 +47,17 @@ def verify_finding(source: str, finding: str, evidence: str) -> dict:
         
     if result.get("supported") is True:
         print(f"✅ Supported. Marking as verified.")
-        mark_note_verified(source, finding)
+        mark_note_verified(session_id,source, finding)
     else:
         print(f"❌Not supported: {result.get('explanation')}")
         
     return result
-def clear_research_notes():
-    """Clears the global research notes for a fresh new research task."""
-    global research_notes
-    research_notes.clear() 
+def clear_research_notes(session_id: str):
+    """Clears the notes for a specific user session."""
+    research_notes_db[session_id] = []
 
-research_notes = []
-def add_research_note(source: str, finding: str, evidence: str) -> dict:
+research_notes_db = {}
+def add_research_note(session_id: str,source: str, finding: str, evidence: str) -> dict:
     """
     Adds a structured research finding to the notes.
     Use this tool to save important information you find on the web.
@@ -71,6 +70,10 @@ def add_research_note(source: str, finding: str, evidence: str) -> dict:
     Returns:
         A confirmation dictionary.
     """
+
+    if session_id not in research_notes_db:
+        research_notes_db[session_id] = []
+
     note = {
         "source": source,
         "finding": finding,
@@ -78,7 +81,7 @@ def add_research_note(source: str, finding: str, evidence: str) -> dict:
         "verified": False
     }
     
-    research_notes.append(note)
+    research_notes_db[session_id].append(note)
     print(f"\n[Note Saved] {finding}")
     
     return {
@@ -87,38 +90,32 @@ def add_research_note(source: str, finding: str, evidence: str) -> dict:
         "finding": finding
     }
 
-def mark_note_verified(source: str, finding: str) -> dict:
-    """
-    Marks a matching research note as verified.
-    """
-    for note in research_notes:
-        if note["source"] == source and note["finding"] == finding:
-            note["verified"] = True
-            print(f"\n[Note Verified] {finding}")
-            return {"status": "verified", "finding": finding}
-            
+def mark_note_verified(session_id: str, source: str, finding: str) -> dict:
+    if session_id in research_notes_db:
+        for note in research_notes_db[session_id]:
+            if note["source"] == source and note["finding"] == finding:
+                note["verified"] = True
+                print(f"\n[Note Verified] {finding}")
+                return {"status": "verified", "finding": finding}
     return {"status": "not found", "finding": finding}
 
-def get_verified_research_notes() -> list:
+def get_verified_research_notes(session_id: str) -> list:
     """
     Returns ONLY the verified research notes for final report generation.
     """
-    verified_notes = []
-    for note in research_notes:
-        if note["verified"] == True:
-            verified_notes.append(note.copy())
-    return verified_notes
+    if session_id not in research_notes_db:
+        return []
+    return [note.copy() for note in research_notes_db[session_id] if note["verified"] == True]
 
 
-def get_research_notes() -> list:
+def get_research_notes(session_id: str) -> list:
     """
     Returns all research notes collected so far in this session.
     Use this tool to review all findings before writing the final report.
     """
-    notes = []
-    for note in research_notes:
-        notes.append(note.copy())
-    return notes
+    if session_id not in research_notes_db:
+        return []
+    return [note.copy() for note in research_notes_db[session_id]]
 
 async def search_web(query, max_results=7):
         

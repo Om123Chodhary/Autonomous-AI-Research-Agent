@@ -232,12 +232,12 @@ def create_research_plan(user_request):
     )
     return response.choices[0].message.content
 
-async def research_agent(user_request, max_steps=8, progress_callback=None):
+async def research_agent(user_request,session_id, max_steps=8, progress_callback=None):
     def emit(message):
         if progress_callback:
             progress_callback(message)
 
-    clear_research_notes()
+    clear_research_notes(session_id)
     print("\n[STATE] Research notes cleared for new task.")
 
     plan = await asyncio.to_thread(create_research_plan, user_request)
@@ -332,6 +332,9 @@ async def research_agent(user_request, max_steps=8, progress_callback=None):
             except Exception as e:
                 print(f"[JSON ERROR] Invalid arguments: {tool_call.function.arguments}")
                 arguments = {}
+
+            if tool_name in ["add_research_note", "verify_finding", "get_research_notes", "get_verified_research_notes"]:
+                arguments["session_id"] = session_id
             
             print(f"\nCalling tool: {tool_name} | Args: {arguments}")
             emit({
@@ -384,7 +387,7 @@ async def research_agent(user_request, max_steps=8, progress_callback=None):
 
     return "Max steps reached without final answer."
 
-async def run_agent(request, max_steps=8, progress_callback=None):
+async def run_agent(request,session_id, max_steps=8, progress_callback=None):
     # Helper function to emit events to the frontend
     def emit(event):
         if progress_callback:
@@ -392,10 +395,10 @@ async def run_agent(request, max_steps=8, progress_callback=None):
             
     try:
         # 1. Run the agent loop
-        await research_agent(request, max_steps=max_steps, progress_callback=progress_callback)
+        await research_agent(request, session_id, max_steps=max_steps, progress_callback=progress_callback)
     
         # 2. Retrieve the verified notes
-        verified_notes = get_verified_research_notes()
+        verified_notes = get_verified_research_notes(session_id)
         print(f"\n[STATUS] Verified findings: {len(verified_notes)}")
     
         # 3. Emit status for report generation
