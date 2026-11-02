@@ -342,21 +342,6 @@ async def research_agent(user_request,session_id, max_steps=8, progress_callback
                 "tool": tool_name,
                 "message": f"Using tool: {tool_name}"
             })
-
-            # 🚨 FIX: AGAR LLM BAR BAR SEARCH KAR RAHA HAI TOH USKO ROKO
-            if tool_name == "search_web" and search_done:
-                print("\n[ENFORCEMENT] LLM tried to search again. Forcing it to read a webpage instead.")
-                result = "Error: You have already performed a web search. You MUST use 'read_webpage' on a URL from your previous search results. Do NOT search again."
-                
-                # Error ko LLM ko wapas bhejo
-                messages.append({
-                    "role": "tool",
-                    "tool_call_id": tool_call.id,
-                    "name": tool_name,
-                    "content": str(result)
-                })
-                continue # Loop ko aage badhao, tool execute mat karo
-
             
             # Update state flags
             if tool_name == "search_web": 
