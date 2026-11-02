@@ -135,9 +135,13 @@ async def search_web(query, max_results=7):
                 "url": hit.url,
                 "snippet": hit.snippet
             })
+         # 🚨 LOGGING ADD KAREIN
+        print(f"[SEARCH SUCCESS] Found {len(results)} results for: {query}")
         return results
+        
     except Exception as e:
-        print(f"[webless error] {e}")
+        # 🚨 ERROR LOGGING
+        print(f"[SEARCH ERROR] Failed to search for '{query}'. Error: {e}")
         return []
 
 def read_webpage(url):
