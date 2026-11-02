@@ -119,6 +119,26 @@ No, the server does not block. FastAPI is asynchronous, but heavy synchronous ta
 I implemented <b>Client Disconnect Handling</b>. The <code>/research</code> endpoint continuously checks <code>await request.is_disconnected()</code>. If the user closes the tab, the server immediately cancels the background agent task. This prevents the server from wasting API tokens and compute resources on a request no one is listening to.
 </details>
 
+<details>
+<summary><b>7.How does your server handle 5 concurrent users?</b></summary>
+<br>
+My FastAPI server is built on an asynchronous event loop. When 5 users connect, the server creates 5 independent background tasks using asyncio.create_task. For CPU-bound or heavy I/O tasks (like web scraping and API calls), I use asyncio.to_thread so the main event loop is never blocked. Each user gets their own asyncio.Queue for real-time SSE streaming. However, currently, the agent state (research notes) is stored in a global list for demonstration. In a true multi-user production environment, I would refactor this to use session-based state management or Redis to ensure data isolation between users
+
+</details>
+<details>
+<summary><b>8. How does the application handle multiple concurrent users (Data Isolation)?</b></summary>
+<br>
+Initially, the agent's state (research notes) was stored in a global Python list. While this worked for a single user, it caused a <b>data-race condition</b> in a multi-user environment—if two users ran research simultaneously, their notes would mix up. 
+
+To solve this, I implemented a <b>Session-Based State Isolation</b> architecture:
+<ul>
+  <li>When a new research request hits the <code>/research</code> endpoint, the backend generates a unique <code>UUID</code> (Session ID) for that specific user.</li>
+  <li>Instead of a single global list, the state is now stored in a Python dictionary (<code>research_notes_db</code>), mapping the <code>session_id</code> to its own list of notes.</li>
+  <li>This <code>session_id</code> is seamlessly injected into the tool arguments (like <code>add_research_note</code>) behind the scenes by the agent loop, completely isolating one user's data from another's.</li>
+</ul>
+This ensures the application is fully concurrent and thread-safe.
+</details>
+
 ---
 
 ## 🚀 Getting Started (Local Setup)
