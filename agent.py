@@ -357,12 +357,6 @@ async def research_agent(user_request,session_id, max_steps=8, progress_callback
                 })
                 continue # Loop ko aage badhao, tool execute mat karo
 
-            print(f"\nCalling tool: {tool_name} | Args: {arguments}")
-            emit({
-                "type": "tool",
-                "tool": tool_name,
-                "message": f"Using tool: {tool_name}"
-            })
             
             # Update state flags
             if tool_name == "search_web": 
