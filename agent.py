@@ -234,7 +234,7 @@ def create_research_plan(user_request):
     )
     return response.choices[0].message.content
 
-async def research_agent(user_request,session_id, max_steps=8, progress_callback=None):
+async def research_agent(user_request, session_id, max_steps=8, progress_callback=None):
     def emit(message):
         if progress_callback:
             progress_callback(message)
@@ -249,38 +249,43 @@ async def research_agent(user_request,session_id, max_steps=8, progress_callback
         "message": "Research Plan Created",
         "plan": plan
     })
-    
+
     search_done = False
     read_done = False
     note_added = False
-    pending_verification = False 
-    
+    pending_verification = False
+
+    system_prompt = (
+        "You are an expert AI Research Agent. Your goal is to investigate the user's request based on the provided Research Plan.\n\n"
+        f"--- RESEARCH PLAN ---\n{plan}\n----------------------\n\n"
+        "You MUST follow this exact loop:\n"
+        "1. 'search_web': Search for relevant URLs.\n"
+        "2. 'read_webpage': Read the content of a specific URL. You MUST PROVIDE A VALID URL. Ignore PDFs.\n"
+        "3. 'add_research_note': Save important findings (source, finding, evidence).\n"
+        "4. 'verify_finding': Immediately verify the note you just saved.\n\n"
+        "--- ADAPTIVE RESEARCH STRATEGY (SMART STOPPING) ---\n"
+        "- For a simple factual question, one verified finding may be sufficient if it completely answers the question.\n"
+        "- For a complex or broad request, gather at least 2 to 3 verified findings from different sources before finishing.\n\n"
+        "--- STRICT RULES ---\n"
+        "1. NEVER skip the 'verify_finding' step after saving a note.\n"
+        "2. ALWAYS provide exact URLs to 'read_webpage'. Do not hallucinate arguments.\n"
+        "3. Do not read PDF links. Only read HTML webpages.\n"
+        "4. If a tool fails, analyze the error and try a different URL or query."
+    )
+
     messages = [
-        {
-            "role": "system",
-            "content": (
-                "You are an expert AI Research Agent. Your goal is to investigate the user's request based on the provided Research Plan.\n\n"
-                f"--- RESEARCH PLAN ---\n{plan}\n----------------------\n\n"
-                "You MUST follow this exact loop:\n"
-                "1. 'search_web': Search for relevant URLs.\n"
-                "2. 'read_webpage': Read the content of a specific URL. **YOU MUST PROVIDE A VALID URL**. Ignore PDFs.\n"
-                "3. 'add_research_note': Save the important findings (source, finding, evidence).\n"
-                "4. 'verify_finding': Immediately verify the note you just saved.\n\n"
-                "--- ADAPTIVE RESEARCH STRATEGY (SMART STOPPING) ---\n"
-                "- If the user's request is a SIMPLE or BASIC factual question (e.g., 'What is X?', 'Who created Y?'), and your FIRST verified finding completely answers the question, YOU MAY STOP and provide the final answer immediately. Do not waste time searching for more.\n"
-                "- If the request is COMPLEX or broad (e.g., 'Impact of X on Y', 'Compare A and B'), you MUST gather at least 2 to 3 verified findings from different sources before giving the final answer.\n\n"
-                "--- STRICT RULES ---\n"
-                "1. NEVER skip the 'verify_finding' step after saving a note.\n"
-                "2. ALWAYS provide exact URLs to the 'read_webpage' tool. Do not hallucinate arguments.\n"
-                "3. Do not read PDF links. Only read HTML webpages.\n"
-                "4. If a tool fails, analyze the error and try a different URL or query."
-            )
-        },
-        {
-            "role": "user", 
-            "content": f"Research Request: {user_request}"
-        }
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": f"Research Request: {user_request}"}
     ]
+
+    def required_tool():
+        if pending_verification:
+            return "verify_finding"
+        if search_done and not read_done:
+            return "read_webpage"
+        if read_done and not note_added:
+            return "add_research_note"
+        return None
 
     for step in range(max_steps):
         print(f"\n--- Agent Step {step + 1} / {max_steps} ---")
@@ -289,131 +294,201 @@ async def research_agent(user_request,session_id, max_steps=8, progress_callback
             "step": step + 1,
             "message": f"Agent Step {step + 1}"
         })
-        
+
+        current_state = (
+            f"search_done={search_done}, read_done={read_done}, "
+            f"note_added={note_added}, pending_verification={pending_verification}."
+        )
+        expected_tool = required_tool()
+
+        messages[0]["content"] = (
+            f"{system_prompt}\n\n"
+            f"--- CURRENT STATE ---\n{current_state}\n"
+            + (
+                f"You MUST call '{expected_tool}' next.\n"
+                if expected_tool
+                else "No research step is currently pending. Begin with search_web or continue researching as appropriate.\n"
+            )
+        )
+
+        if pending_verification:
+            tool_choice = {
+                "type": "function",
+                "function": {"name": "verify_finding"}
+            }
+        elif not read_done and search_done:
+            tool_choice = {
+                "type": "function",
+                "function": {"name": "read_webpage"}
+            }
+        elif not note_added and read_done:
+            tool_choice = {
+                "type": "function",
+                "function": {"name": "add_research_note"}
+            }
+        else:
+            tool_choice = "auto"
+
         # Groq API Call with Threadpool to prevent Event Loop blocking
         try:
             response = await asyncio.to_thread(
                 call_llm,
                 messages=messages,
                 tools=TOOLS,
-                tool_choice="auto"
+                tool_choice=tool_choice,
+                temperature=0.0
             )
         except Exception as e:
             print(f"\nAPI ERROR: {e}")
-            # Emit error event to frontend and break the loop if API fails
             emit({"type": "error", "message": f"API Error: {str(e)}"})
             return "API Error occurred during research."
-        
+
         message = response.choices[0].message
         messages.append(message)
 
-        # Enforcement Logic (Prevent LLM from skipping steps)
         if not message.tool_calls:
-            if search_done and not read_done:
+            if expected_tool == "read_webpage":
                 print("\n[ENFORCEMENT] Forcing read_webpage...")
-                messages.append({"role": "system", "content": "You must read a webpage first."})
+                messages.append({
+                    "role": "system",
+                    "content": "You must read a webpage first."
+                })
                 continue
-            elif read_done and not note_added:
+            elif expected_tool == "add_research_note":
                 print("\n[ENFORCEMENT] Read pages but didn't save notes. Forcing add_research_note...")
-                messages.append({"role": "system", "content": "You MUST use 'add_research_note' to save your findings before answering."})
+                messages.append({
+                    "role": "system",
+                    "content": "You MUST use 'add_research_note' to save your findings before answering."
+                })
                 continue
-            elif pending_verification: # <--- NEW CHECK
+            elif expected_tool == "verify_finding":
                 print("\n[ENFORCEMENT] You saved a note but didn't verify it! Forcing verify_finding...")
-                messages.append({"role": "system", "content": "You MUST use 'verify_finding' on the note you just saved before doing anything else."})
+                messages.append({
+                    "role": "system",
+                    "content": "You MUST use 'verify_finding' on the note you just saved before doing anything else."
+                })
                 continue
             else:
                 print("\nReturning final answer.")
                 return message.content
 
-        # Tool Execution
-        for tool_call in message.tool_calls:
+        retry_after_tool_error = False
+
+        for tool_index, tool_call in enumerate(message.tool_calls):
             tool_name = tool_call.function.name
 
-            try:
-                arguments = json.loads(tool_call.function.arguments)
-            except Exception as e:
-                print(f"[JSON ERROR] Invalid arguments: {tool_call.function.arguments}")
-                arguments = {}
-
-            if tool_name in ["add_research_note", "verify_finding", "get_research_notes", "get_verified_research_notes"]:
-                arguments["session_id"] = session_id
-            
-            print(f"\nCalling tool: {tool_name} | Args: {arguments}")
-            # 🚨 STRICT ENFORCEMENT: AGAR SEARCH KIYA HAI TOH DIRECT SEARCH BLOCK HOGA
-            if tool_name == "search_web" and search_done:
-                print("\n[ENFORCEMENT] Blocked duplicate search. Forcing read_webpage.")
-                result = "Error: You have already performed a web search. You MUST use 'read_webpage' on a URL from your previous search results. Do NOT search again."
+            # Catch hallucinated tool names without crashing the agent.
+            if tool_name not in AVAILABLE_TOOLS:
+                print(f"\n[TOOL ERROR] Unknown tool requested: {tool_name}")
                 messages.append({
                     "role": "tool",
                     "tool_call_id": tool_call.id,
-                    "name": tool_name,
-                    "content": str(result)
+                    "content": f"Error: Unknown tool '{tool_name}'. Available tools are: {', '.join(AVAILABLE_TOOLS.keys())}."
                 })
-                continue # Search execute mat karo, LLM ko error do
+                retry_after_tool_error = True
 
-             # 1. Agar search ho gaya hai aur read nahi hua -> Sirf read allowed
-            if search_done and not read_done and tool_name != "read_webpage":
-                result = "Error: You have already searched. You MUST use 'read_webpage' now."
-                print("[ENFORCEMENT] Blocked. Forcing read_webpage.")
-            
-            # 2. Agar read ho gaya hai aur note save nahi hua -> Kuch bhi allowed nahi, sirf add_research_note
-            elif read_done and not note_added and tool_name != "add_research_note":
-                result = "Error: You just read a webpage. You MUST use 'add_research_note' to save the findings before doing anything else."
-                print("[ENFORCEMENT] Blocked. Forcing add_research_note.")
-            
-            # 3. Agar note save ho gaya hai -> Sirf verify allowed
-            elif pending_verification and tool_name != "verify_finding":
-                result = "Error: You saved a note. You MUST use 'verify_finding' on it now."
-                print("[ENFORCEMENT] Blocked. Forcing verify_finding.")
-            
-            # 4. Agar sab theek hai, toh tool execute karo
             else:
-                emit({"type": "tool", "tool": tool_name, "message": f"Using tool: {tool_name}"})
-            
-            # Flags update karein
-            if tool_name == "search_web": 
-                search_done = True
-                read_done = False # Naya search matlab abhi padha nahi gaya
-                note_added = False
-            elif tool_name == "read_webpage": 
-                read_done = True
-            elif tool_name == "add_research_note":
-                note_added = True
-                pending_verification = True 
-            elif tool_name == "verify_finding":
-                emit({"type": "verification", "message": "Verifying Research Evidence..."})
-                pending_verification = False 
-                # 🚨 SABSE ZAROORI: Ek cycle poora hone ke baad flags reset karo taaki naya search ho sake
-                search_done = False 
-                read_done = False
-                note_added = False
-            
-            tool_function = AVAILABLE_TOOLS.get(tool_name)
-            
-            if not tool_function:
-                result = f"Unknown tool: {tool_name}"
-            else:
-                try:
-                    # Check if tool is async
-                    if inspect.iscoroutinefunction(tool_function):
-                        result = await tool_function(**arguments)
-                    else:
-                        # Run synchronous tools in a separate thread
-                        result = await asyncio.to_thread(tool_function, **arguments)
-                    emit({
-                        "type": "tool_complete",
-                        "tool": tool_name,
-                        "message": f"Completed: {tool_name}"
+                required_now = required_tool()
+                out_of_sequence = (
+                    (required_now is not None and tool_name != required_now)
+                    or (
+                        required_now is None
+                        and tool_name in {"read_webpage", "add_research_note", "verify_finding"}
+                    )
+                )
+
+                if out_of_sequence:
+                    expected = required_now or "search_web"
+                    print(f"\n[ENFORCEMENT] Blocked {tool_name}. Forcing {expected}.")
+                    messages.append({
+                        "role": "tool",
+                        "tool_call_id": tool_call.id,
+                        "name": tool_name,
+                        "content": f"Error: '{tool_name}' is not allowed at this stage. You must call '{expected}' next."
                     })
-                except Exception as e:
-                    result = f"Error: {e}"
-            
-            messages.append({
-                "role": "tool",
-                "tool_call_id": tool_call.id, # Groq requires this
-                "name": tool_name,
-                "content": str(result)
-            })
+                    retry_after_tool_error = True
+
+                else:
+                    try:
+                        arguments = json.loads(tool_call.function.arguments)
+                    except Exception:
+                        print(f"[JSON ERROR] Invalid arguments: {tool_call.function.arguments}")
+                        arguments = {}
+
+                    if tool_name in {
+                        "add_research_note",
+                        "verify_finding",
+                        "get_research_notes",
+                        "get_verified_research_notes"
+                    }:
+                        arguments["session_id"] = session_id
+
+                    print(f"\nCalling tool: {tool_name} | Args: {arguments}")
+                    emit({
+                        "type": "tool",
+                        "tool": tool_name,
+                        "message": f"Using tool: {tool_name}"
+                    })
+
+                    tool_function = AVAILABLE_TOOLS[tool_name]
+                    tool_succeeded = False
+
+                    try:
+                        if inspect.iscoroutinefunction(tool_function):
+                            result = await tool_function(**arguments)
+                        else:
+                            result = await asyncio.to_thread(tool_function, **arguments)
+                        tool_succeeded = True
+                        emit({
+                            "type": "tool_complete",
+                            "tool": tool_name,
+                            "message": f"Completed: {tool_name}"
+                        })
+                    except Exception as e:
+                        result = f"Error: {e}"
+
+                    messages.append({
+                        "role": "tool",
+                        "tool_call_id": tool_call.id,
+                        "name": tool_name,
+                        "content": str(result)
+                    })
+
+                    if tool_succeeded:
+                        if tool_name == "search_web":
+                            search_done = True
+                            read_done = False
+                            note_added = False
+                            pending_verification = False
+                        elif tool_name == "read_webpage":
+                            read_done = True
+                        elif tool_name == "add_research_note":
+                            note_added = True
+                            pending_verification = True
+                        elif tool_name == "verify_finding":
+                            emit({
+                                "type": "verification",
+                                "message": "Verifying Research Evidence..."
+                            })
+                            # A successful verification completes this cycle.
+                            search_done = False
+                            read_done = False
+                            note_added = False
+                            pending_verification = False
+
+            if retry_after_tool_error:
+                # Close out any remaining tool calls from this assistant response
+                # so the next API request has a complete tool-call history.
+                for remaining_call in message.tool_calls[tool_index + 1:]:
+                    messages.append({
+                        "role": "tool",
+                        "tool_call_id": remaining_call.id,
+                        "content": "Error: Not executed because an earlier tool call in this response was rejected. Retry with the required tool."
+                    })
+                break
+
+        if retry_after_tool_error:
+            continue
 
     return "Max steps reached without final answer."
 
