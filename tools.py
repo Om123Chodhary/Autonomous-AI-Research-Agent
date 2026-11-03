@@ -11,11 +11,13 @@ from webless import search_sync
 
 load_dotenv()
 
-api_key = os.getenv("GROQ_API_KEY_1") or os.getenv("GROQ_API_KEY_3")
+base_url = os.getenv("BASE_URL")
+
+api_key = os.getenv("GEMINI_API_KEY_2") or os.getenv("GEMINI_API_KEY_3")or os.getenv("GEMINI_API_KEY_1")
 
 # Groq Client setup
 client = OpenAI(
-    base_url="https://api.groq.com/openai/v1",
+    base_url=base_url,
     api_key=api_key
 )
 MODEL = os.getenv("MODEL", "llama3-70b-8192")

@@ -11,11 +11,13 @@ from tools import (
 )
 load_dotenv()
 
+base_url = os.getenv("BASE_URL")
+
 # 1. Load all API keys
 GROQ_KEYS = [
-    os.getenv("GROQ_API_KEY_1"),
-    os.getenv("GROQ_API_KEY_2"),
-    os.getenv("GROQ_API_KEY_3")
+    os.getenv("GEMINI_API_KEY_2"),
+    os.getenv("GEMINI_API_KEY_2"),
+    os.getenv("GEMINI_API_KEY_3")
 ]
 
 # Filter out empty keys (in case one is not available)
@@ -23,7 +25,7 @@ GROQ_KEYS = [k for k in GROQ_KEYS if k]
 
 # 2. Create a separate Client for each key
 CLIENTS = [
-    OpenAI(base_url="https://api.groq.com/openai/v1", api_key=key) 
+    OpenAI(base_url=base_url, api_key=key) 
     for key in GROQ_KEYS
 ]
 
