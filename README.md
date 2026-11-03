@@ -28,6 +28,29 @@
 *   **Data Processing:** BeautifulSoup4, `webless` (Web Search API)
 *   **Deployment:** Docker, Render
 
+## 🏗️ Core Engineering Pillars
+
+This project is not just a prompt-wrapper; it is built with production-grade software engineering principles in mind. Here is how the architecture handles the four critical pillars of AI engineering:
+
+### 🛡️ 1. Reliability (Never Crash)
+- **Multi-Key API Fallback:** The system maintains a pool of API keys. If one key hits a rate limit (429) or quota exhaustion, the system automatically and silently rotates to the next key.
+- **Graceful Degradation:** If a tool fails (e.g., a website blocks scraping or an API goes down), the Python code catches the error and feeds it back to the LLM, allowing the agent to try a different URL instead of crashing.
+- **Retry Logic:** Handles temporary server failures (HTTP 503) by pausing and retrying the request automatically.
+
+### 🧠 2. Accuracy (Zero Hallucination)
+- **State-Machine Enforcement:** The biggest problem with LLMs is "laziness" (skipping steps). We solved this using Python-level boolean flags (`search_done`, `read_done`, etc.). The code forces the LLM to follow a strict `Search ➡️ Read ➡️ Save Note ➡️ Verify` loop.
+- **LLM-as-a-Judge:** A dedicated secondary LLM call acts as a fact-checker. It verifies if the extracted evidence genuinely supports the research finding before saving it to the database.
+- **Fuzzy Matching:** When the LLM slightly modifies text during verification, the Python backend uses fuzzy logic to match the source and finding, ensuring no verified data is lost.
+
+### 🔒 3. Security & Isolation (Multi-User Ready)
+- **Session-Based Data Isolation:** The agent state is not a global variable. Each user request generates a unique `UUID` (Session ID). Research notes are stored in a dictionary mapped to this ID, ensuring User A's data never leaks into User B's report.
+- **Strict Tool Validation:** If the LLM hallucinates a fake tool name (e.g., `read_pagepage` instead of `read_webpage`), the Python code intercepts it, blocks the execution, and forces the model to use a valid tool.
+- **Environment Security:** Sensitive API keys are strictly managed via `.env` files and are never hardcoded or pushed to version control.
+
+### ⚡ 4. Speed & Performance (Non-Blocking)
+- **Asynchronous Threading (`asyncio.to_thread`):** Heavy, blocking tasks like web scraping (`requests.get`) and LLM API calls are offloaded to background threads. This ensures the FastAPI event loop is never blocked, allowing the server to handle multiple concurrent users seamlessly.
+- **Real-Time Streaming (SSE):** Instead of making the user wait in the dark, the backend uses Server-Sent Events to stream the agent's internal thoughts (`[Planner]`, `[Searching]`, `[Verifying]`) directly to the frontend in real-time.
+- **Dockerized Deployment:** The entire environment is containerized, ensuring identical performance and behavior across local machines and cloud servers (Render).
 ## ⚙️ How the Workflow Works
 
 1.  **Input:** User enters a research topic in the web interface.
