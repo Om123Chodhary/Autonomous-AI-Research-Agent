@@ -91,7 +91,7 @@ async def research(topic: str, request: Request):
     async def run_agent_task():
         try:
             # Directly call the agent with the progress callback
-            await run_agent(topic,session_id, max_steps=8, progress_callback=progress_callback)
+            await run_agent(topic,session_id, max_steps=12, progress_callback=progress_callback)
         except Exception as e:
             queue.put_nowait({"type": "error", "message": str(e)})
 

@@ -171,47 +171,6 @@ AVAILABLE_TOOLS = {
     "get_verified_research_notes": get_verified_research_notes
 }
 
-def generate_report(user_request: str, verified_notes: list) -> str:
-    
-    # 1. Early Exit (Do not call the API if no data is available)
-    if not verified_notes:
-        return "### ⚠️ No Verified Findings\n\nI could not find and verify enough information to generate a report for this topic. Please try a different or broader query."
-
-    # 2. Format the verified findings
-    research_text = "\n\n".join([
-        f"- **Source**: {note['source']}\n  **Finding**: {note['finding']}\n  **Evidence**: {note['evidence']}"
-        for note in verified_notes
-    ])
-    
-    response = call_llm(
-        messages=[
-            {
-                "role": "system", 
-                "content": (
-                    "You are an expert Senior Research Analyst. Your task is to synthesize the provided verified findings into a highly professional, natural-sounding report in Markdown format.\n\n"
-                    "CRITICAL RULES:\n"
-                    "1. Use ONLY the provided findings. Do NOT invent facts or outside knowledge.\n"
-                    "2. Let the DATA dictate the structure. If the data is rich in one area and empty in another, adapt the report accordingly.\n"
-                    "3. Do NOT force standard sections (like Introduction or Limitations) if the provided data does not support them. It is better to omit a section than to fill it with fluff.\n"
-                    "4. Format beautifully using Markdown (H2, H3, bold text, bullet points, and tables where appropriate to compare data).\n"
-                    "5. Maintain a professional, analytical tone."
-                )
-            },
-            {
-                "role": "user", 
-                "content": (
-                    f"Research Request:\n{user_request}\n\n"
-                    f"Verified Findings:\n{research_text}\n\n"
-                    "Please synthesize these findings into a comprehensive report. "
-                    "You may use sections like 'Key Findings', 'Analysis', and 'Conclusion' based on what the data actually provides. "
-                    "Ensure the flow is logical and directly answers the user's request."
-                )
-            }
-        ],
-        temperature=0.3 # Balanced creativity for writing, but strictly grounded in data
-    )
-    print(response.choices[0].message.content)
-    return response.choices[0].message.content
 
 def create_research_plan(user_request):
     print(f"\n[Planner] Creating research plan for: {user_request}")
@@ -234,7 +193,7 @@ def create_research_plan(user_request):
     )
     return response.choices[0].message.content
 
-async def research_agent(user_request, session_id, max_steps=8, progress_callback=None):
+async def research_agent(user_request, session_id, max_steps=12, progress_callback=None):
     def emit(message):
         if progress_callback:
             progress_callback(message)
@@ -492,7 +451,50 @@ async def research_agent(user_request, session_id, max_steps=8, progress_callbac
 
     return "Max steps reached without final answer."
 
-async def run_agent(request,session_id, max_steps=8, progress_callback=None):
+def generate_report(user_request: str, verified_notes: list) -> str:
+    
+    # 1. Early Exit (Do not call the API if no data is available)
+    if not verified_notes:
+        return "### ⚠️ No Verified Findings\n\nI could not find and verify enough information to generate a report for this topic. Please try a different or broader query."
+
+    # 2. Format the verified findings
+    research_text = "\n\n".join([
+        f"- **Source**: {note['source']}\n  **Finding**: {note['finding']}\n  **Evidence**: {note['evidence']}"
+        for note in verified_notes
+    ])
+    
+    response = call_llm(
+        messages=[
+            {
+                "role": "system", 
+                "content": (
+                    "You are an expert Senior Research Analyst. Your task is to synthesize the provided verified findings into a highly professional, natural-sounding report in Markdown format.\n\n"
+                    "CRITICAL RULES:\n"
+                    "1. Use ONLY the provided findings. Do NOT invent facts or outside knowledge.\n"
+                    "2. Let the DATA dictate the structure. If the data is rich in one area and empty in another, adapt the report accordingly.\n"
+                    "3. Do NOT force standard sections (like Introduction or Limitations) if the provided data does not support them. It is better to omit a section than to fill it with fluff.\n"
+                    "4. Format beautifully using Markdown (H2, H3, bold text, bullet points, and tables where appropriate to compare data).\n"
+                    "5. Maintain a professional, analytical tone."
+                )
+            },
+            {
+                "role": "user", 
+                "content": (
+                    f"Research Request:\n{user_request}\n\n"
+                    f"Verified Findings:\n{research_text}\n\n"
+                    "Please synthesize these findings into a comprehensive report. "
+                    "You may use sections like 'Key Findings', 'Analysis', and 'Conclusion' based on what the data actually provides. "
+                    "Ensure the flow is logical and directly answers the user's request."
+                )
+            }
+        ],
+        temperature=0.3 # Balanced creativity for writing, but strictly grounded in data
+    )
+    print(response.choices[0].message.content)
+    return response.choices[0].message.content
+
+
+async def run_agent(request,session_id, max_steps=12, progress_callback=None):
     # Helper function to emit events to the frontend
     def emit(event):
         if progress_callback:

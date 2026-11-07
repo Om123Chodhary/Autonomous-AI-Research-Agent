@@ -199,4 +199,4 @@ def read_webpage(url):
         strip=True
     )
 
-    return text[:4000]
+    return text[:6000]
